@@ -1,53 +1,92 @@
 import { useState, useEffect } from 'react';
+import { fetchImages } from '../imageApi';
+import { Toaster } from 'react-hot-toast';
+
+import ErrorMessage from '../ErrorMessage/ErrorMessage';
+import ImageGallery from '../ImageGallery/ImageGallery';
+import ImageModal from '../ImageModal/ImageModal';
+import Loader from '../Loader/Loader';
+import LoadMoreBtn from '../LoadMoreBtn/LoadMoreBtn';
+import SearchBar from '../SearchBar/SearchBar';
+
+import './App.module.css';
 import React from 'react';
-import ContactForm from '../ContactForm/ContactForm';
-import ContactList from '../ContactList/ContactList';
 
-import SearchBox from '../SearchBox/SearchBox';
-
-function App() {
-  const [contacts, setContacts] = useState(() => {
-    const savedContacts = localStorage.getItem('contacts');
-    if (savedContacts) {
-      return JSON.parse(savedContacts);
-    }
-    return [
-      { id: 'id-1', name: 'Rosie Simpson', number: '459-12-56' },
-      { id: 'id-2', name: 'Hermione Kline', number: '443-89-12' },
-      { id: 'id-3', name: 'Eden Clements', number: '645-17-79' },
-      { id: 'id-4', name: 'Annie Copeland', number: '227-91-26' },
-    ];
-  });
-  const [filter, setFilter] = useState('');
-
-  const addContact = (newContact) => {
-    setContacts((prevContacts) => {
-      return [...prevContacts, newContact];
-    });
-  };
-
-  const deleteContact = (contactId) => {
-    setContacts((prevContacts) => {
-      return prevContacts.filter((contact) => contact.id !== contactId);
-    });
-  };
-
-  const searchedContact = contacts.filter((contact) =>
-    contact.name.toLowerCase().includes(filter.toLowerCase()),
-  );
+export default function App() {
+  const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [noResults, setNoResults] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('contacts', JSON.stringify(contacts));
-  }, [contacts]);
+    if (!query) return;
+
+    const loadImages = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        setNoResults(false);
+
+        const data = await fetchImages(query, page);
+
+        if (data.results.length === 0 && page === 1) {
+          setNoResults(true);
+          return;
+        }
+        setTotalPages(data.total_pages);
+        setImages((prev) =>
+          page === 1 ? data.results : [...prev, ...data.results],
+        );
+
+        // eslint-disable-next-line no-unused-vars
+      } catch (err) {
+        setError('Something went wrong...');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadImages();
+  }, [query, page]);
+
+  const handleSearch = (newQuery) => {
+    setQuery(newQuery);
+    setPage(1);
+    setImages([]);
+  };
+
+  const handleLoadMore = () => {
+    setPage((prev) => prev + 1);
+  };
 
   return (
-    <div>
-      <h1>Phonebook</h1>
-      <ContactForm onAdd={addContact} />
-      <SearchBox value={filter} onFilterChange={setFilter} />
-      <ContactList contacts={searchedContact} onDelete={deleteContact} />
-    </div>
+    <>
+      <Toaster />
+      <SearchBar onSubmit={handleSearch} />
+
+      {(error || noResults) && (
+        <ErrorMessage
+          message={error || 'No results found. Please try another search term.'}
+        />
+      )}
+
+      <ImageGallery images={images} onImageClick={setSelectedImage} />
+      {loading && <Loader />}
+      {images.length > 0 && !loading && page < totalPages && (
+        <LoadMoreBtn onClick={handleLoadMore} />
+      )}
+
+      {selectedImage && (
+        <ImageModal
+          isOpen={!!selectedImage}
+          onClose={() => setSelectedImage(null)}
+          image={selectedImage}
+        />
+      )}
+    </>
   );
 }
-
-export default App;
